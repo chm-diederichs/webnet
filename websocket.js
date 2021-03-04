@@ -1,17 +1,19 @@
 const { Duplex } = require('streamx')
+const bint = require('bint8array')
 
 module.exports = class WebSocketStream extends Duplex {
-  constructor (socket) {
+  constructor (socket, opts = {}) {
     super()
 
     this.socket = socket
+    this.onconnect = opts.onconnect || noop
 
     if (this.socket.on) {
       this.socket.on('message', (data) => this._pushBuffer(data))
       this.socket.on('error', (err) => this.destroy(err))
     } else {
       this.socket.binaryType = 'arraybuffer'
-      this.socket.onmessage = (e) => this.push(Buffer.from(e.data))
+      this.socket.onmessage = (e) => this.push(new Uint8Array(e.data))
       this.socket.onerror = (err) => this.destroy(err)
     }
 
@@ -19,8 +21,8 @@ module.exports = class WebSocketStream extends Duplex {
   }
 
   _pushBuffer (data) {
-    if (typeof data === 'string') data = Buffer.from(data)
-    if (!Buffer.isBuffer(data)) return
+    if (typeof data === 'string') data = bint.fromString(data)
+    if (!(data instanceof Uint8Array)) return
     this.push(data)
   }
 
@@ -49,7 +51,10 @@ module.exports = class WebSocketStream extends Duplex {
         self.socket.onclose = null
       }
 
-      if (!err) self.emit('connect')
+      if (!err) {
+        self.emit('connect')
+        self.onconnect()
+      }
       cb(err)
     }
   }
@@ -68,3 +73,5 @@ module.exports = class WebSocketStream extends Duplex {
     cb(null)
   }
 }
+
+function noop () {}
